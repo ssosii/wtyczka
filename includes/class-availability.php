@@ -143,7 +143,7 @@ class Rezerwacje_Availability
                 if (date('Y-m-d') === $date) {
                     // Dodajemy bufor czasowy, np. 1 godzina przed
                     $buffer_time = 60 * 60;
-                    if (strtotime($slot_start) < (time() + $buffer_time)) {
+                    if (strtotime(date('Y-m-d') . ' ' . $slot_start) < (time() + $buffer_time)) { // Poprawka: Pełna data i godzina
                         $is_past = true;
                     }
                 }
@@ -164,6 +164,37 @@ class Rezerwacje_Availability
 
         return $slots;
     }
+
+    // NOWA FUNKCJA
+    public static function get_available_dates_for_month($therapist_id, $service_duration, $month, $year)
+    {
+        $available_dates = array();
+        $days_in_month = cal_days_in_month(CAL_GREGORIAN, $month, $year);
+        $today = date('Y-m-d');
+
+        for ($day = 1; $day <= $days_in_month; $day++) {
+            $date_str = sprintf('%04d-%02d-%02d', $year, $month, $day);
+
+            // Nie sprawdzaj przeszłych dni
+            if ($date_str < $today) {
+                continue;
+            }
+
+            // Użyj istniejącej funkcji, aby pobrać sloty na dany dzień
+            $slots = self::get_available_slots($therapist_id, $date_str, $service_duration);
+
+            // Sprawdź, czy jest CHOCIAŻ JEDEN dostępny slot
+            foreach ($slots as $slot) {
+                if ($slot['available']) {
+                    $available_dates[] = $date_str;
+                    break; // Wystarczy jeden wolny slot, przejdź do następnego dnia
+                }
+            }
+        }
+
+        return $available_dates;
+    }
+
 
     public static function is_slot_blocked($therapist_id, $date, $start_time, $end_time)
     {

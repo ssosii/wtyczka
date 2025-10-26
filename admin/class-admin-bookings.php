@@ -20,6 +20,8 @@ class Rezerwacje_Admin_Bookings
     {
         add_action('wp_ajax_rezerwacje_approve_booking', array($this, 'ajax_approve_booking'));
         add_action('wp_ajax_rezerwacje_reject_booking', array($this, 'ajax_reject_booking'));
+        add_action('wp_ajax_rezerwacje_cancel_booking', array($this, 'ajax_cancel_booking')); // NOWA AKCJA
+        add_action('wp_ajax_rezerwacje_update_booking_time', array($this, 'ajax_update_booking_time')); // NOWA AKCJA EDYCJI
         add_action('wp_ajax_rezerwacje_add_blocked_slot', array($this, 'ajax_add_blocked_slot'));
         add_action('wp_ajax_rezerwacje_remove_blocked_slot', array($this, 'ajax_remove_blocked_slot'));
         add_action('wp_ajax_rezerwacje_get_calendar_bookings', array($this, 'ajax_get_calendar_bookings'));
@@ -149,50 +151,51 @@ class Rezerwacje_Admin_Bookings
 
         <script>
             jQuery(document).ready(function($) {
-                $('.approve-booking').on('click', function(e) {
-                    e.preventDefault();
+                        $('.approve-booking').on('click', function(e) {
+                                e.preventDefault();
 
-                    if (!confirm('Czy na pewno zatwierdzić tę rezerwację?')) {
-                        return;
-                    }
+                                if (!confirm('Czy na pewno zatwierdzić tę rezerwację?')) {
+                                    return;
+                                }
 
-                    var id = $(this).data('id');
+                                var id = $(this).data('id');
 
-                    $.post(rezerwacjeAdmin.ajax_url, {
-                        action: 'rezerwacje_approve_booking',
-                        nonce: rezerwacjeAdmin.nonce,
-                        id: id
-                    }, function(response) {
-                        if (response.success) {
-                            location.reload();
-                        } else {
-                            alert('Błąd: ' + response.data);
-                        }
-                    });
-                });
+                                $.post(rezerwacjeAdmin.ajax_url, {
+                                        action: 'rezerwacje_approve_booking',
+                                        nonce: rezerwacjeAdmin.nonce,
+                                        id: id
+                                    }, function(response) {
+                                        if (response.success) {
+                                            location.reload();
+                                        } else {
+                                            alert('Błąd: '
+                                                ad: ' + response.data);
+                                            }
+                                        });
+                                });
 
-                $('.reject-booking').on('click', function(e) {
-                    e.preventDefault();
+                            $('.reject-booking').on('click', function(e) {
+                                e.preventDefault();
 
-                    if (!confirm('Czy na pewno odrzucić tę rezerwację?')) {
-                        return;
-                    }
+                                if (!confirm('Czy na pewno odrzucić tę rezerwację?')) {
+                                    return;
+                                }
 
-                    var id = $(this).data('id');
+                                var id = $(this).data('id');
 
-                    $.post(rezerwacjeAdmin.ajax_url, {
-                        action: 'rezerwacje_reject_booking',
-                        nonce: rezerwacjeAdmin.nonce,
-                        id: id
-                    }, function(response) {
-                        if (response.success) {
-                            location.reload();
-                        } else {
-                            alert('Błąd: ' + response.data);
-                        }
-                    });
-                });
-            });
+                                $.post(rezerwacjeAdmin.ajax_url, {
+                                    action: 'rezerwacje_reject_booking',
+                                    nonce: rezerwacjeAdmin.nonce,
+                                    id: id
+                                }, function(response) {
+                                    if (response.success) {
+                                        location.reload();
+                                    } else {
+                                        alert('Błąd: ' + response.data);
+                                    }
+                                });
+                            });
+                        });
         </script>
     <?php
     }
@@ -208,9 +211,296 @@ class Rezerwacje_Admin_Bookings
             <div id="rezerwacje-admin-calendar"></div>
         </div>
 
+        <!-- HTML dla Modala (Popup) -->
+        <div id="rezerwacje-event-modal" class="rezerwacje-modal-overlay" style="display: none;">
+            <div class="rezerwacje-modal-content">
+                <div class="rezerwacje-modal-header">
+                    <h3 id="modal-title">Szczegóły rezerwacji</h3>
+                    <button id="modal-btn-close" class="rezerwacje-modal-close">&times;</button>
+                </div>
+                <div class="rezerwacje-modal-body">
+                    <!-- Widok szczegółów -->
+                    <div id="modal-details-view">
+                        <p><strong>Pacjent:</strong> <span id="modal-patient-name"></span></p>
+                        <p><strong>Terapeuta:</strong> <span id="modal-therapist-name"></span></p>
+                        <p><strong>Usługa:</strong> <span id="modal-service-name"></span></p>
+                        <p><strong>Status:</strong> <span id="modal-status"></span></p>
+                        <p><strong>Notatki:</strong> <span id="modal-notes"></span></p>
+                    </div>
+                    <!-- Widok edycji (nowy) -->
+                    <div id="modal-edit-view" style="display: none;">
+                        <p>Zmieniasz rezerwację dla: <strong id="modal-edit-patient-name"></strong></p>
+                        <p class="form-row">
+                            <label for="modal-edit-date">Data:</label>
+                            <input type="date" id="modal-edit-date" class="modal-input">
+                        </p>
+                        <p class="form-row">
+                            <label for="modal-edit-start-time">Godzina od:</label>
+                            <input type="time" id="modal-edit-start-time" class="modal-input" step="600">
+                        </p>
+                        <p class="form-row">
+                            <label for="modal-edit-end-time">Godzina do:</label>
+                            <input type="time" id="modal-edit-end-time" class="modal-input" step="600">
+                        </p>
+                        <p id="modal-edit-error" class="rezerwacje-error" style="display: none;"></p>
+                    </div>
+                </div>
+                <div class="rezerwacje-modal-footer">
+                    <!-- Przyciski widoku szczegółów -->
+                    <button id="modal-btn-approve" class="button button-primary" style="display: none;">Zatwierdź</button>
+                    <button id="modal-btn-reject" class="button button-secondary" style="display: none;">Odrzuć</button>
+                    <button id="modal-btn-cancel" class="button button-secondary" style="display: none;">Anuluj rezerwację</button>
+                    <button id="modal-btn-delete-blocked" class="button button-danger" style="display: none;">Usuń blokadę</button>
+                    <button id="modal-btn-edit" class="button button-secondary" style="display: none;">Edytuj termin</button> <!-- NOWY PRZYCISK -->
+
+                    <!-- Przyciski widoku edycji -->
+                    <button id="modal-btn-save" class="button button-primary" style="display: none;">Zapisz zmiany</button> <!-- NOWY PRZYCISK -->
+                    <button id="modal-btn-back-to-details" class="button button-secondary" style="display: none;">Anuluj</button> <!-- NOWY PRZYCISK -->
+                </div>
+            </div>
+        </div>
+
+
         <script>
             document.addEventListener('DOMContentLoaded', function() {
                 var calendarEl = document.getElementById('rezerwacje-admin-calendar');
+
+                // Zmienne do przechowywania ID dla akcji modala
+                let currentBookingId = null;
+                let currentBlockedSlotId = null;
+                let currentBookingDetails = {}; // Przechowa dane do edycji
+
+                // Referencje do elementów modala
+                const modal = document.getElementById('rezerwacje-event-modal');
+                const modalTitle = document.getElementById('modal-title');
+
+                // Elementy widoku szczegółów
+                const modalDetailsView = document.getElementById('modal-details-view');
+                const modalPatientName = document.getElementById('modal-patient-name');
+                const modalTherapistName = document.getElementById('modal-therapist-name');
+                const modalServiceName = document.getElementById('modal-service-name');
+                const modalStatus = document.getElementById('modal-status');
+                const modalNotes = document.getElementById('modal-notes');
+
+                // Elementy widoku edycji
+                const modalEditView = document.getElementById('modal-edit-view');
+                const modalEditPatientName = document.getElementById('modal-edit-patient-name');
+                const modalEditDate = document.getElementById('modal-edit-date');
+                const modalEditStartTime = document.getElementById('modal-edit-start-time');
+                const modalEditEndTime = document.getElementById('modal-edit-end-time');
+                const modalEditError = document.getElementById('modal-edit-error');
+
+                // Przyciski Stopki
+                const btnClose = document.getElementById('modal-btn-close');
+                const btnApprove = document.getElementById('modal-btn-approve');
+                const btnReject = document.getElementById('modal-btn-reject');
+                const btnCancel = document.getElementById('modal-btn-cancel');
+                const btnDeleteBlocked = document.getElementById('modal-btn-delete-blocked');
+                const btnEdit = document.getElementById('modal-btn-edit');
+                const btnSave = document.getElementById('modal-btn-save');
+                const btnBackToDetails = document.getElementById('modal-btn-back-to-details');
+
+
+                function showModal() {
+                    modal.style.display = 'flex';
+                }
+
+                function hideModal() {
+                    modal.style.display = 'none';
+                    // Resetuj ID
+                    currentBookingId = null;
+                    currentBlockedSlotId = null;
+                    currentBookingDetails = {};
+
+                    // Resetowanie treści i widoczności przycisków
+                    btnApprove.style.display = 'none';
+                    btnReject.style.display = 'none';
+                    btnCancel.style.display = 'none';
+                    btnDeleteBlocked.style.display = 'none';
+                    btnEdit.style.display = 'none';
+                    btnSave.style.display = 'none';
+                    btnBackToDetails.style.display = 'none';
+
+                    // Resetowanie widoków
+                    modalDetailsView.style.display = 'block';
+                    modalEditView.style.display = 'none';
+                    modalEditError.style.display = 'none';
+
+                    modalPatientName.parentElement.style.display = 'block';
+                    modalTherapistName.parentElement.style.display = 'block';
+                    modalServiceName.parentElement.style.display = 'block';
+                    modalStatus.parentElement.style.display = 'block';
+                    modalNotes.parentElement.style.display = 'block';
+                }
+
+                // Zamykanie modala
+                btnClose.addEventListener('click', hideModal);
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal) {
+                        hideModal();
+                    }
+                });
+
+                // Akcje modala
+                btnApprove.addEventListener('click', function() {
+                    if (!currentBookingId) return;
+                    if (!confirm('Czy na pewno zatwierdzić tę rezerwację?')) return;
+
+                    jQuery.post(rezerwacjeAdmin.ajax_url, {
+                        action: 'rezerwacje_approve_booking',
+                        nonce: rezerwacjeAdmin.nonce,
+                        id: currentBookingId
+                    }, function(response) {
+                        if (response.success) {
+                            location.reload(); // Prościej, lub calendar.refetchEvents()
+                        } else {
+                            alert('Błąd: ' + response.data);
+                        }
+                    });
+                });
+
+                btnReject.addEventListener('click', function() {
+                    if (!currentBookingId) return;
+                    if (!confirm('Czy na pewno odrzucić tę rezerwację?')) return;
+
+                    jQuery.post(rezerwacjeAdmin.ajax_url, {
+                        action: 'rezerwacje_reject_booking',
+                        nonce: rezerwacjeAdmin.nonce,
+                        id: currentBookingId
+                    }, function(response) {
+                        if (response.success) {
+                            location.reload();
+                        } else {
+                            alert('Błąd: ' + response.data);
+                        }
+                    });
+                });
+
+                btnDeleteBlocked.addEventListener('click', function() {
+                    if (!currentBlockedSlotId) return;
+                    if (!confirm('Czy na pewno usunąć tę blokadę?')) return;
+
+                    jQuery.post(rezerwacjeAdmin.ajax_url, {
+                        action: 'rezerwacje_remove_blocked_slot',
+                        nonce: rezerwacjeAdmin.nonce,
+                        id: currentBlockedSlotId
+                    }, function(response) {
+                        if (response.success) {
+                            location.reload();
+                        } else {
+                            alert('Błąd: ' + response.data);
+                        }
+                    });
+                });
+
+                // NOWY HANDLER DLA ANULOWANIA
+                btnCancel.addEventListener('click', function() {
+                    if (!currentBookingId) return;
+                    if (!confirm('Czy na pewno ANULOWAĆ tę rezerwację? Pacjent zostanie powiadomiony.')) return;
+
+                    jQuery.post(rezerwacjeAdmin.ajax_url, {
+                        action: 'rezerwacje_cancel_booking', // Nowa akcja AJAX
+                        nonce: rezerwacjeAdmin.nonce,
+                        id: currentBookingId
+                    }, function(response) {
+                        if (response.success) {
+                            location.reload(); // Odśwież kalendarz
+                        } else {
+                            alert('Błąd: ' + response.data);
+                        }
+                    });
+                });
+
+                // --- NOWE HANDLERY DLA EDYCJI ---
+
+                // Przycisk "Edytuj termin"
+                btnEdit.addEventListener('click', function() {
+                    // Przełącz widoki
+                    modalDetailsView.style.display = 'none';
+                    modalEditView.style.display = 'block';
+                    modalTitle.innerText = 'Edytuj termin rezerwacji';
+
+                    // Ustaw wartości w formularzu
+                    modalEditPatientName.innerText = modalPatientName.innerText;
+                    modalEditDate.value = currentBookingDetails.date;
+                    modalEditStartTime.value = currentBookingDetails.start;
+                    modalEditEndTime.value = currentBookingDetails.end;
+
+                    // Przełącz przyciski w stopce
+                    btnApprove.style.display = 'none';
+                    btnReject.style.display = 'none';
+                    btnCancel.style.display = 'none';
+                    btnEdit.style.display = 'none';
+
+                    btnSave.style.display = 'inline-block';
+                    btnBackToDetails.style.display = 'inline-block';
+                });
+
+                // Przycisk "Anuluj" (w trybie edycji)
+                btnBackToDetails.addEventListener('click', function() {
+                    // Przełącz widoki
+                    modalDetailsView.style.display = 'block';
+                    modalEditView.style.display = 'none';
+                    modalTitle.innerText = 'Szczegóły rezerwacji';
+                    modalEditError.style.display = 'none';
+
+                    // Przełącz przyciski w stopce (na podstawie statusu)
+                    if (currentBookingDetails.status === 'pending') {
+                        btnApprove.style.display = 'inline-block';
+                        btnReject.style.display = 'inline-block';
+                    } else if (currentBookingDetails.status === 'approved') {
+                        btnCancel.style.display = 'inline-block';
+                    }
+                    btnEdit.style.display = 'inline-block'; // Zawsze pokazuj "Edytuj" w widoku szczegółów
+
+                    btnSave.style.display = 'none';
+                    btnBackToDetails.style.display = 'none';
+                });
+
+                // Przycisk "Zapisz zmiany"
+                btnSave.addEventListener('click', function() {
+                    const newDate = modalEditDate.value;
+                    const newStart = modalEditStartTime.value;
+                    const newEnd = modalEditEndTime.value;
+
+                    if (!newDate || !newStart || !newEnd) {
+                        modalEditError.innerText = 'Błąd: Wszystkie pola są wymagane.';
+                        modalEditError.style.display = 'block';
+                        return;
+                    }
+
+                    btnSave.innerText = 'Zapisywanie...';
+                    btnSave.disabled = true;
+                    modalEditError.style.display = 'none';
+
+                    jQuery.post(rezerwacjeAdmin.ajax_url, {
+                        action: 'rezerwacje_update_booking_time',
+                        nonce: rezerwacjeAdmin.nonce,
+                        id: currentBookingId,
+                        therapist_id: currentBookingDetails.therapist_id,
+                        booking_date: newDate,
+                        start_time: newStart,
+                        end_time: newEnd
+                    }, function(response) {
+                        btnSave.innerText = 'Zapisz zmiany';
+                        btnSave.disabled = false;
+
+                        if (response.success) {
+                            location.reload(); // Najprostsza akcja po sukcesie
+                        } else {
+                            modalEditError.innerText = 'Błąd: ' + response.data;
+                            modalEditError.style.display = 'block';
+                        }
+                    }).fail(function() {
+                        btnSave.innerText = 'Zapisz zmiany';
+                        btnSave.disabled = false;
+                        modalEditError.innerText = 'Błąd: Wystąpił błąd serwera.';
+                        modalEditError.style.display = 'block';
+                    });
+                });
+                // --- KONIEC HANDLERÓW EDYCJI ---
+
+
                 if (calendarEl && typeof FullCalendar !== 'undefined') {
                     var calendar = new FullCalendar.Calendar(calendarEl, {
                         initialView: 'timeGridWeek',
@@ -220,9 +510,7 @@ class Rezerwacje_Admin_Bookings
                             center: 'title',
                             right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek'
                         },
-                        // POPRAWKA: Użyj funkcji do ładowania zdarzeń, aby mieć pewność, że nonce jest wysyłany w ciele POST
                         events: function(fetchInfo, successCallback, failureCallback) {
-                            // Użyj jQuery.ajax, aby ręcznie wysłać dane
                             jQuery.ajax({
                                 url: rezerwacjeAdmin.ajax_url,
                                 type: 'POST',
@@ -263,7 +551,62 @@ class Rezerwacje_Admin_Bookings
                         height: 'auto',
                         contentHeight: 'auto',
                         stickyHeaderDates: true,
-                        expandRows: true
+                        expandRows: true,
+
+                        // NOWOŚĆ: Obsługa kliknięcia eventu
+                        eventClick: function(info) {
+                            info.jsEvent.preventDefault(); // Zapobiegaj domyślnej akcji (np. otwarciu linku)
+
+                            const props = info.event.extendedProps;
+                            const title = info.event.title;
+
+                            // Resetuj stan modala przed wypełnieniem
+                            hideModal();
+
+                            if (props.type === 'booking') {
+                                modalTitle.innerText = 'Szczegóły rezerwacji';
+                                modalPatientName.innerText = props.patient;
+                                modalTherapistName.innerText = props.therapist;
+                                modalServiceName.innerText = props.service;
+                                modalStatus.innerText = props.status;
+                                modalNotes.innerText = props.notes || '-';
+
+                                currentBookingId = props.booking_id;
+                                // Zapisz pełne dane do edycji
+                                currentBookingDetails = {
+                                    date: info.event.start.toISOString().split('T')[0],
+                                    start: info.event.startStr.split('T')[1] ? info.event.startStr.split('T')[1].substring(0, 5) : '00:00',
+                                    end: info.event.endStr.split('T')[1] ? info.event.endStr.split('T')[1].substring(0, 5) : '00:00',
+                                    status: props.status,
+                                    therapist_id: props.therapist_id
+                                };
+
+                                btnEdit.style.display = 'inline-block'; // Pokaż przycisk edycji
+
+                                if (props.status === 'pending') {
+                                    btnApprove.style.display = 'inline-block';
+                                    btnReject.style.display = 'inline-block';
+                                } else if (props.status === 'approved') {
+                                    // Pokaż przycisk anulowania dla zatwierdzonych
+                                    btnCancel.style.display = 'inline-block';
+                                }
+
+                            } else if (props.type === 'blocked') {
+                                modalTitle.innerText = 'Zablokowany termin';
+                                modalPatientName.innerText = props.patient_name; // Używamy patient_name jako nazwy blokady
+                                modalNotes.innerText = props.notes || '-';
+
+                                // Ukryj niepotrzebne pola
+                                modalTherapistName.parentElement.style.display = 'none';
+                                modalServiceName.parentElement.style.display = 'none';
+                                modalStatus.parentElement.style.display = 'none';
+
+                                currentBlockedSlotId = props.blocked_slot_id;
+                                btnDeleteBlocked.style.display = 'inline-block';
+                            }
+
+                            showModal();
+                        }
                     });
                     calendar.render();
                 } else {
@@ -424,7 +767,7 @@ class Rezerwacje_Admin_Bookings
                     if (isRecurring) {
                         formData.day_of_week = $('[name="day_of_week"]').val();
                         formData.start_date = $('[name="recurrence_start_date"]').val();
-                        formData.recurrence_end_date = $('[name="recurrence_end_date"]').val();
+                        formData.recurrence_end_date = $('[name."recurrence_end_date"]').val();
                     } else {
                         formData.start_date = $('[name="start_date"]').val();
                     }
@@ -565,7 +908,6 @@ class Rezerwacje_Admin_Bookings
             }
         }
 
-        // Pobieranie dat z FullCalendar (teraz wysyłane w $_POST)
         $start_date = isset($_POST['start']) ? sanitize_text_field($_POST['start']) : date('Y-m-d', strtotime('-1 month'));
         $end_date = isset($_POST['end']) ? sanitize_text_field($_POST['end']) : date('Y-m-d', strtotime('+1 month'));
 
@@ -581,7 +923,6 @@ class Rezerwacje_Admin_Bookings
 
         $events = array();
 
-        // Przetwarzanie rezerwacji
         foreach ($bookings as $booking) {
             if ($booking->status === 'rejected' || $booking->status === 'cancelled') {
                 continue;
@@ -592,39 +933,43 @@ class Rezerwacje_Admin_Bookings
                 $color = '#FF9800'; // Oczekująca
             }
 
+            // Tworzenie tytułu eventu
+            $event_title = $booking->patient_name . "\n"; // Nowa linia
+            $event_title .= $booking->service_name . "\n";
+            $event_title .= '(' . $booking->therapist_name . ')';
+
+
             $events[] = array(
-                'title' => $booking->patient_name . ' (' . $booking->service_name . ') - ' . $booking->therapist_name,
+                'title' => $event_title, // Zaktualizowany tytuł z nowymi liniami
                 'start' => $booking->booking_date . 'T' . $booking->start_time,
                 'end' => $booking->booking_date . 'T' . $booking->end_time,
                 'backgroundColor' => $color,
                 'borderColor' => $color,
                 'extendedProps' => array(
                     'type' => 'booking',
+                    'booking_id' => $booking->id, // Dodajemy ID rezerwacji
+                    'therapist_id' => $booking->therapist_id, // DODANO ID TERAPEUTY
                     'status' => $booking->status,
                     'patient' => $booking->patient_name,
                     'service' => $booking->service_name,
-                    'therapist' => $booking->therapist_name
+                    'therapist' => $booking->therapist_name,
+                    'notes' => $booking->notes
                 )
             );
         }
 
-        // Przetwarzanie zablokowanych terminów
         foreach ($blocked_slots as $slot) {
             $therapist = Rezerwacje_Therapist::get($slot->therapist_id);
             $therapist_name = $therapist ? $therapist->name : 'Brak';
-            $title = 'Zablokowane: ' . $slot->patient_name . ' (' . $therapist_name . ')';
+            $title = 'Zablokowane: ' . $slot->patient_name . "\n" . ' (' . $therapist_name . ')';
             $color = '#E91E63'; // Zablokowane
 
             if ($slot->is_recurring) {
-                // Generowanie powtarzających się zdarzeń
                 $start = new DateTime($slot->start_date);
-
-                // POPRAWKA: Upewnij się, że pusta data lub '0000-00-00' jest obsługiwana poprawnie
                 $endDateStr = (!empty($slot->recurrence_end_date) && $slot->recurrence_end_date !== '0000-00-00') ? $slot->recurrence_end_date : $args['date_to'];
                 $end = new DateTime($endDateStr);
-
-                $interval = new DateInterval('P1W'); // Co tydzień
-                $period = new DatePeriod($start, $interval, $end->modify('+1 day')); // Modyfikator +1 dzień, aby uwzględnić ostatni dzień
+                $interval = new DateInterval('P1W');
+                $period = new DatePeriod($start, $interval, $end->modify('+1 day'));
 
                 foreach ($period as $date) {
                     if ($date->format('N') == $slot->day_of_week && $date->format('Y-m-d') <= $args['date_to']) {
@@ -637,6 +982,8 @@ class Rezerwacje_Admin_Bookings
                                 'borderColor' => $color,
                                 'extendedProps' => array(
                                     'type' => 'blocked',
+                                    'blocked_slot_id' => $slot->id, // Dodajemy ID blokady
+                                    'patient_name' => $slot->patient_name,
                                     'notes' => $slot->notes
                                 )
                             );
@@ -644,7 +991,6 @@ class Rezerwacje_Admin_Bookings
                     }
                 }
             } else {
-                // Pojedyncze zdarzenie
                 $events[] = array(
                     'title' => $title,
                     'start' => $slot->start_date . 'T' . $slot->start_time,
@@ -653,13 +999,15 @@ class Rezerwacje_Admin_Bookings
                     'borderColor' => $color,
                     'extendedProps' => array(
                         'type' => 'blocked',
+                        'blocked_slot_id' => $slot->id, // Dodajemy ID blokady
+                        'patient_name' => $slot->patient_name,
                         'notes' => $slot->notes
                     )
                 );
             }
         }
 
-        wp_send_json($events); // FullCalendar oczekuje tablicy JSON, nie obiektu {success: true, data: ...}
+        wp_send_json($events);
     }
 
 
@@ -701,6 +1049,74 @@ class Rezerwacje_Admin_Bookings
         }
     }
 
+    // NOWA FUNKCJA HANDLERA AJAX
+    public function ajax_cancel_booking()
+    {
+        check_ajax_referer('rezerwacje_admin_nonce', 'nonce');
+
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error('Brak uprawnień');
+        }
+
+        $booking_id = intval($_POST['id']);
+        $result = Rezerwacje_Booking::cancel($booking_id); // Używa metody 'cancel'
+
+        if ($result) {
+            // Używamy powiadomienia o odrzuceniu, aby poinformować pacjenta o anulowaniu
+            Rezerwacje_Email::send_booking_rejected($booking_id);
+            wp_send_json_success();
+        } else {
+            wp_send_json_error('Nie udało się anulować');
+        }
+    }
+
+    // NOWA FUNKCJA HANDLERA AJAX DLA EDYCJI
+    public function ajax_update_booking_time()
+    {
+        check_ajax_referer('rezerwacje_admin_nonce', 'nonce');
+
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error('Brak uprawnień');
+        }
+
+        $id = intval($_POST['id']);
+        $therapist_id = intval($_POST['therapist_id']);
+        $date = sanitize_text_field($_POST['booking_date']);
+        $start_time = sanitize_text_field($_POST['start_time']) . ':00'; // Upewnij się, że format to HH:MM:SS
+        $end_time = sanitize_text_field($_POST['end_time']) . ':00';
+
+        // Walidacja
+        if (empty($id) || empty($therapist_id) || empty($date) || empty($start_time) || empty($end_time)) {
+            wp_send_json_error('Brak wszystkich wymaganych danych.');
+        }
+
+        // Sprawdź, czy nowy termin nie koliduje z INNĄ rezerwacją
+        if (Rezerwacje_Booking::is_slot_booked($therapist_id, $date, $start_time, $end_time, $id)) {
+            wp_send_json_error('Ten termin jest już zajęty przez inną rezerwację.');
+        }
+
+        // Sprawdź, czy nowy termin nie koliduje z blokadą
+        if (Rezerwacje_Availability::is_slot_blocked($therapist_id, $date, $start_time, $end_time)) {
+            wp_send_json_error('Ten termin jest zablokowany (np. przez przerwę lub spotkanie).');
+        }
+
+        // Aktualizuj rezerwację
+        $data = array(
+            'booking_date' => $date,
+            'start_time' => $start_time,
+            'end_time' => $end_time
+        );
+
+        $result = Rezerwacje_Booking::update($id, $data);
+
+        if ($result !== false) { // update zwraca 0 jeśli nie było zmian, lub false przy błędzie
+            // Można by dodać wysłanie emaila o zmianie terminu, ale na razie brak
+            wp_send_json_success(array('message' => 'Termin zaktualizowany.'));
+        } else {
+            wp_send_json_error('Nie udało się zapisać zmian w bazie danych.');
+        }
+    }
+
     public function ajax_add_blocked_slot()
     {
         check_ajax_referer('rezerwacje_admin_nonce', 'nonce');
@@ -721,7 +1137,6 @@ class Rezerwacje_Admin_Bookings
 
         if ($data['is_recurring']) {
             $data['day_of_week'] = intval($_POST['day_of_week']);
-            // POPRAWKA: Zapisz NULL zamiast pustego stringa, jeśli data nie jest ustawiona
             $data['recurrence_end_date'] = !empty($_POST['recurrence_end_date']) ? sanitize_text_field($_POST['recurrence_end_date']) : null;
         }
 

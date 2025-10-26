@@ -26,6 +26,11 @@ class Rezerwacje_Frontend
         add_action('wp_ajax_nopriv_rezerwacje_get_services', array($this, 'ajax_get_services'));
         add_action('wp_ajax_rezerwacje_get_available_slots', array($this, 'ajax_get_available_slots'));
         add_action('wp_ajax_nopriv_rezerwacje_get_available_slots', array($this, 'ajax_get_available_slots'));
+
+        // NOWA AKCJA
+        add_action('wp_ajax_rezerwacje_get_monthly_availability', array($this, 'ajax_get_monthly_availability'));
+        add_action('wp_ajax_nopriv_rezerwacje_get_monthly_availability', array($this, 'ajax_get_monthly_availability'));
+
         add_action('wp_ajax_rezerwacje_create_booking', array($this, 'ajax_create_booking'));
         add_action('wp_ajax_nopriv_rezerwacje_create_booking', array($this, 'ajax_create_booking'));
     }
@@ -184,6 +189,26 @@ class Rezerwacje_Frontend
         $slots = Rezerwacje_Availability::get_available_slots($therapist_id, $date, $service->duration);
 
         wp_send_json_success($slots);
+    }
+
+    // NOWA FUNKCJA
+    public function ajax_get_monthly_availability()
+    {
+        check_ajax_referer('rezerwacje_frontend_nonce', 'nonce');
+
+        $therapist_id = intval($_POST['therapist_id']);
+        $service_id = intval($_POST['service_id']);
+        $month = intval($_POST['month']) + 1; // JS month is 0-11, PHP needs 1-12
+        $year = intval($_POST['year']);
+
+        $service = Rezerwacje_Service::get($service_id);
+        if (!$service) {
+            wp_send_json_error('Usługa nie istnieje');
+        }
+
+        $available_dates = Rezerwacje_Availability::get_available_dates_for_month($therapist_id, $service->duration, $month, $year);
+
+        wp_send_json_success($available_dates);
     }
 
     public function ajax_create_booking()

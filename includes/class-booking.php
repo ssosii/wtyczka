@@ -147,24 +147,27 @@ class Rezerwacje_Booking
         return self::get_all($args);
     }
 
-    public static function is_slot_booked($therapist_id, $date, $start_time, $end_time)
+    public static function is_slot_booked($therapist_id, $date, $start_time, $end_time, $exclude_booking_id = 0)
     {
         global $wpdb;
         $table = $wpdb->prefix . 'rezerwacje_bookings';
 
         // Logika kolizji: (SlotStart < BookEnd) AND (SlotEnd > BookStart)
+        // Dodano warunek (AND id != %d), aby wykluczyć sprawdzaną rezerwację
         $sql = "SELECT COUNT(*) FROM $table
                 WHERE therapist_id = %d
                 AND booking_date = %s
                 AND status IN ('pending', 'approved')
-                AND (start_time < %s AND end_time > %s)";
+                AND (start_time < %s AND end_time > %s)
+                AND id != %d";
 
         $count = $wpdb->get_var($wpdb->prepare(
             $sql,
             $therapist_id,
             $date,
             $end_time,   // SlotEnd
-            $start_time  // SlotStart
+            $start_time,  // SlotStart
+            $exclude_booking_id // ID rezerwacji do wykluczenia
         ));
 
         return $count > 0;

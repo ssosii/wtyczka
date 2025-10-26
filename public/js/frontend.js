@@ -6,6 +6,7 @@ jQuery(document).ready(function ($) {
     var selectedTime = null;
     var currentMonth = new Date().getMonth();
     var currentYear = new Date().getFullYear();
+    var monthlyAvailabilityCache = {}; // Cache dla wczytanych miesięcy
 
     function showStep(step) {
         $('.rezerwacje-step').removeClass('active');
@@ -80,7 +81,7 @@ jQuery(document).ready(function ($) {
         });
     }
 
-    function renderCalendar(month, year) {
+    function renderCalendar(month, year, availableDates) {
         var firstDay = new Date(year, month, 1);
         var lastDay = new Date(year, month + 1, 0);
         var daysInMonth = lastDay.getDate();
@@ -110,7 +111,15 @@ jQuery(document).ready(function ($) {
             var dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
 
             var classes = 'rezerwacje-calendar-day';
-            if (isDisabled) classes += ' disabled';
+            if (isDisabled) {
+                classes += ' disabled';
+            } else {
+                // NOWA LOGIKA: Sprawdź, czy data jest na liście dostępnych
+                if (availableDates && availableDates.includes(dateStr)) {
+                    classes += ' has-availability';
+                }
+            }
+
             if (dateStr === selectedDate) classes += ' selected';
 
             html += '<div class="' + classes + '" data-date="' + dateStr + '">';
@@ -120,6 +129,39 @@ jQuery(document).ready(function ($) {
 
         $('#rezerwacje-calendar-grid').html(html);
     }
+
+    // NOWA FUNKCJA do wczytywania dostępności i renderowania kalendarza
+    function loadMonthlyAvailabilityAndRenderCalendar(month, year) {
+        var $grid = $('#rezerwacje-calendar-grid');
+        var cacheKey = selectedTherapist.id + '-' + selectedService.id + '-' + year + '-' + month;
+
+        // Pokaż spinner kalendarza
+        $grid.html('<div class="rezerwacje-loading" style="grid-column: 1 / 8;"></div>');
+        $('#rezerwacje-current-month').text('Wczytywanie...');
+
+        // Sprawdź cache
+        if (monthlyAvailabilityCache[cacheKey]) {
+            renderCalendar(month, year, monthlyAvailabilityCache[cacheKey]);
+            return;
+        }
+
+        $.post(rezerwacjeFrontend.ajax_url, {
+            action: 'rezerwacje_get_monthly_availability',
+            nonce: rezerwacjeFrontend.nonce,
+            therapist_id: selectedTherapist.id,
+            service_id: selectedService.id,
+            month: month,
+            year: year
+        }, function (response) {
+            if (response.success) {
+                monthlyAvailabilityCache[cacheKey] = response.data; // Zapisz w cache
+                renderCalendar(month, year, response.data);
+            } else {
+                $grid.html('<p class="rezerwacje-error" style="grid-column: 1 / 8;">Błąd wczytywania dostępności.</p>');
+            }
+        });
+    }
+
 
     function loadAvailableSlots(therapistId, serviceId, date) {
         var $list = $('#rezerwacje-time-slots');
@@ -174,7 +216,9 @@ jQuery(document).ready(function ($) {
             duration: $(this).data('duration'),
             price: $(this).data('price')
         };
-        renderCalendar(currentMonth, currentYear);
+        // Zresetuj cache po zmianie usługi
+        monthlyAvailabilityCache = {};
+        loadMonthlyAvailabilityAndRenderCalendar(currentMonth, currentYear); // ZAMIAST renderCalendar
         showStep(3);
     });
 
@@ -184,7 +228,7 @@ jQuery(document).ready(function ($) {
             currentMonth = 11;
             currentYear--;
         }
-        renderCalendar(currentMonth, currentYear);
+        loadMonthlyAvailabilityAndRenderCalendar(currentMonth, currentYear); // ZAMIAST renderCalendar
     });
 
     $('#rezerwacje-next-month').on('click', function () {
@@ -193,7 +237,7 @@ jQuery(document).ready(function ($) {
             currentMonth = 0;
             currentYear++;
         }
-        renderCalendar(currentMonth, currentYear);
+        loadMonthlyAvailabilityAndRenderCalendar(currentMonth, currentYear); // ZAMIAST renderCalendar
     });
 
     $(document).on('click', '.rezerwacje-calendar-day:not(.disabled):not(.header)', function () {
@@ -260,7 +304,8 @@ jQuery(document).ready(function ($) {
         if (currentStep > 1) {
             if (currentStep === 4) { // Powrót z wyboru godziny do kalendarza
                 selectedDate = null; // Resetuj datę
-                renderCalendar(currentMonth, currentYear); // Odśwież kalendarz bez zaznaczenia
+                // Odśwież kalendarz z wczytaną dostępnością
+                loadMonthlyAvailabilityAndRenderCalendar(currentMonth, currentYear);
             }
             showStep(currentStep - 1);
         }
@@ -276,3 +321,4 @@ jQuery(document).ready(function ($) {
 
     loadTherapists();
 });
+
