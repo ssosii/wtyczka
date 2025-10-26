@@ -1,0 +1,90 @@
+.rezerwacje-dashboard {
+    margin-top: 20px;
+}
+
+.rezerwacje-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.rezerwacje-stat-box {
+    background: white;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.rezerwacje-stat-box h3 {
+    margin: 0 0 15px 0;
+    font-size: 14px;
+    text-transform: uppercase;
+    color: #666;
+}
+
+.rezerwacje-stat-box .stat-number {
+    font-size: 48px;
+    font-weight: bold;
+    color: #2271b1;
+    margin-bottom: 10px;
+}
+
+.rezerwacje-stat-box a {
+    display: inline-block;
+    margin-top: 10px;
+    text-decoration: none;
+}
+
+.single-date-row,
+.recurring-row {
+    transition: opacity 0.3s;
+}
+
+.rezerwacje-calendar-link-box {
+    margin-top: 30px;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 20px 30px;
+}
+
+.rezerwacje-calendar-admin-wrap {
+    margin-top: 20px;
+}
+
+#rezerwacje-admin-calendar {
+    background: #fff;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-top: 20px;
+    max-width: 100%;
+}
+
+
+/* Poprawki dla FullCalendar w WordPress */
+
+.rezerwacje-calendar-admin-wrap .fc {
+    max-width: 100%;
+}
+
+.rezerwacje-calendar-admin-wrap .fc-toolbar-title {
+    font-size: 1.5em;
+}
+
+.rezerwacje-calendar-admin-wrap .fc-event {
+    font-size: 0.85em;
+    padding: 5px;
+    cursor: pointer;
+}
+
+.rezerwacje-calendar-admin-wrap .fc-event:hover {
+    opacity: 0.8;
+}
+
+.rezerwacje-calendar-admin-wrap .fc-daygrid-day-number {
+    font-size: 1.1em;
+    padding: 5px;
+}
