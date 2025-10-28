@@ -4,11 +4,21 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-class Rezerwacje_Therapist {
+class Rezerwacje_Therapist
+{
 
-    public static function create($data) {
+    public static function create($data)
+    {
         global $wpdb;
         $table = $wpdb->prefix . 'rezerwacje_therapists';
+
+        // POPRAWKA: Poprawna obsługa NULL dla photo_id
+        $photo_val = null;
+        $photo_format = '%s'; // Domyślnie %s dla NULL
+        if (isset($data['photo_id']) && !empty($data['photo_id'])) {
+            $photo_val = intval($data['photo_id']);
+            $photo_format = '%d'; // Zmień na %d, jeśli jest wartość
+        }
 
         $result = $wpdb->insert(
             $table,
@@ -18,9 +28,11 @@ class Rezerwacje_Therapist {
                 'email' => $data['email'],
                 'phone' => isset($data['phone']) ? $data['phone'] : null,
                 'bio' => isset($data['bio']) ? $data['bio'] : null,
+                'photo_id' => $photo_val, // POPRAWIONA WARTOŚĆ
+                'calendar_color' => isset($data['calendar_color']) ? $data['calendar_color'] : null,
                 'active' => isset($data['active']) ? $data['active'] : 1
             ),
-            array('%d', '%s', '%s', '%s', '%s', '%d')
+            array('%d', '%s', '%s', '%s', '%s', $photo_format, '%s', '%d') // POPRAWIONY FORMAT
         );
 
         if ($result) {
@@ -30,7 +42,8 @@ class Rezerwacje_Therapist {
         return false;
     }
 
-    public static function update($id, $data) {
+    public static function update($id, $data)
+    {
         global $wpdb;
         $table = $wpdb->prefix . 'rezerwacje_therapists';
 
@@ -57,6 +70,22 @@ class Rezerwacje_Therapist {
             $update_data['bio'] = $data['bio'];
             $format[] = '%s';
         }
+
+        // POPRAWKA: Poprawna obsługa NULL dla photo_id w funkcji update
+        if (isset($data['photo_id'])) {
+            if (empty($data['photo_id'])) { // Jeśli pusty string, 0 lub null
+                $update_data['photo_id'] = null;
+                $format[] = '%s'; // Użyj %s, aby wpisać NULL
+            } else {
+                $update_data['photo_id'] = intval($data['photo_id']);
+                $format[] = '%d';
+            }
+        }
+
+        if (isset($data['calendar_color'])) {
+            $update_data['calendar_color'] = $data['calendar_color'];
+            $format[] = '%s';
+        }
         if (isset($data['active'])) {
             $update_data['active'] = $data['active'];
             $format[] = '%d';
@@ -71,14 +100,16 @@ class Rezerwacje_Therapist {
         );
     }
 
-    public static function delete($id) {
+    public static function delete($id)
+    {
         global $wpdb;
         $table = $wpdb->prefix . 'rezerwacje_therapists';
 
         return $wpdb->delete($table, array('id' => $id), array('%d'));
     }
 
-    public static function get($id) {
+    public static function get($id)
+    {
         global $wpdb;
         $table = $wpdb->prefix . 'rezerwacje_therapists';
 
@@ -87,7 +118,8 @@ class Rezerwacje_Therapist {
         );
     }
 
-    public static function get_by_user_id($user_id) {
+    public static function get_by_user_id($user_id)
+    {
         global $wpdb;
         $table = $wpdb->prefix . 'rezerwacje_therapists';
 
@@ -96,7 +128,8 @@ class Rezerwacje_Therapist {
         );
     }
 
-    public static function get_all($args = array()) {
+    public static function get_all($args = array())
+    {
         global $wpdb;
         $table = $wpdb->prefix . 'rezerwacje_therapists';
 
@@ -111,7 +144,8 @@ class Rezerwacje_Therapist {
         return $wpdb->get_results($sql);
     }
 
-    public static function add_service($therapist_id, $service_id, $custom_price = null) {
+    public static function add_service($therapist_id, $service_id, $custom_price = null)
+    {
         global $wpdb;
         $table = $wpdb->prefix . 'rezerwacje_therapist_services';
 
@@ -128,7 +162,8 @@ class Rezerwacje_Therapist {
         return $result !== false;
     }
 
-    public static function remove_service($therapist_id, $service_id) {
+    public static function remove_service($therapist_id, $service_id)
+    {
         global $wpdb;
         $table = $wpdb->prefix . 'rezerwacje_therapist_services';
 
@@ -142,7 +177,8 @@ class Rezerwacje_Therapist {
         );
     }
 
-    public static function update_service_price($therapist_id, $service_id, $custom_price) {
+    public static function update_service_price($therapist_id, $service_id, $custom_price)
+    {
         global $wpdb;
         $table = $wpdb->prefix . 'rezerwacje_therapist_services';
 
@@ -158,7 +194,8 @@ class Rezerwacje_Therapist {
         );
     }
 
-    public static function get_services($therapist_id) {
+    public static function get_services($therapist_id)
+    {
         global $wpdb;
         $services_table = $wpdb->prefix . 'rezerwacje_services';
         $ts_table = $wpdb->prefix . 'rezerwacje_therapist_services';
@@ -172,7 +209,8 @@ class Rezerwacje_Therapist {
         return $wpdb->get_results($wpdb->prepare($sql, $therapist_id));
     }
 
-    public static function get_assigned_services($therapist_id) {
+    public static function get_assigned_services($therapist_id)
+    {
         global $wpdb;
         $services_table = $wpdb->prefix . 'rezerwacje_services';
         $ts_table = $wpdb->prefix . 'rezerwacje_therapist_services';
@@ -186,7 +224,8 @@ class Rezerwacje_Therapist {
         return $wpdb->get_results($wpdb->prepare($sql, $therapist_id));
     }
 
-    public static function get_service_price($therapist_id, $service_id) {
+    public static function get_service_price($therapist_id, $service_id)
+    {
         global $wpdb;
         $services_table = $wpdb->prefix . 'rezerwacje_services';
         $ts_table = $wpdb->prefix . 'rezerwacje_therapist_services';

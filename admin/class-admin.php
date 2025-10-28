@@ -105,6 +105,16 @@ class Rezerwacje_Admin
             wp_enqueue_script('fullcalendar', 'https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js', array(), '6.1.15', true);
         }
 
+        // NOWOŚĆ: Dodaj skrypty dla edytora terapeutów (Media Uploader i Color Picker)
+        if ($hook === 'rezerwacje_page_rezerwacje-therapists') {
+            // Włączamy skrypty do obsługi biblioteki mediów
+            wp_enqueue_media();
+
+            // Włączamy skrypty i style dla Color Pickera
+            wp_enqueue_style('wp-color-picker');
+            wp_enqueue_script('wp-color-picker');
+        }
+
         wp_localize_script('rezerwacje-admin', 'rezerwacjeAdmin', array(
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('rezerwacje_admin_nonce')

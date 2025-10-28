@@ -4,14 +4,17 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-class Rezerwacje_Database {
+class Rezerwacje_Database
+{
 
-    public static function create_tables() {
+    public static function create_tables()
+    {
         global $wpdb;
         $charset_collate = $wpdb->get_charset_collate();
 
         $sql = array();
 
+        // TA WERSJA ZAWIERA POPRAWNE KOLUMNY: photo_id i calendar_color
         $sql[] = "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}rezerwacje_therapists (
             id bigint(20) NOT NULL AUTO_INCREMENT,
             user_id bigint(20) NOT NULL,
@@ -19,6 +22,8 @@ class Rezerwacje_Database {
             email varchar(255) NOT NULL,
             phone varchar(50) DEFAULT NULL,
             bio text DEFAULT NULL,
+            photo_id bigint(20) DEFAULT NULL,
+            calendar_color varchar(20) DEFAULT NULL,
             active tinyint(1) DEFAULT 1,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
@@ -107,10 +112,12 @@ class Rezerwacje_Database {
             dbDelta($query);
         }
 
-        update_option('rezerwacje_db_version', REZERWACJE_VERSION);
+        // Ta linijka zostanie zaktualizowana przez nowy kod w rezerwacje.php
+        // update_option('rezerwacje_db_version', REZERWACJE_VERSION);
     }
 
-    public static function drop_tables() {
+    public static function drop_tables()
+    {
         global $wpdb;
 
         $tables = array(

@@ -4,17 +4,20 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-class Rezerwacje_Admin_Therapists {
+class Rezerwacje_Admin_Therapists
+{
     private static $instance = null;
 
-    public static function get_instance() {
+    public static function get_instance()
+    {
         if (null === self::$instance) {
             self::$instance = new self();
         }
         return self::$instance;
     }
 
-    private function __construct() {
+    private function __construct()
+    {
         add_action('wp_ajax_rezerwacje_save_therapist', array($this, 'ajax_save_therapist'));
         add_action('wp_ajax_rezerwacje_delete_therapist', array($this, 'ajax_delete_therapist'));
         add_action('wp_ajax_rezerwacje_save_therapist_services', array($this, 'ajax_save_therapist_services'));
@@ -22,7 +25,8 @@ class Rezerwacje_Admin_Therapists {
         add_action('wp_ajax_rezerwacje_delete_availability', array($this, 'ajax_delete_availability'));
     }
 
-    public static function render_page() {
+    public static function render_page()
+    {
         if (!current_user_can('manage_options')) {
             wp_die('Brak uprawnień');
         }
@@ -47,10 +51,11 @@ class Rezerwacje_Admin_Therapists {
         }
     }
 
-    private static function render_list() {
+    private static function render_list()
+    {
         $therapists = Rezerwacje_Therapist::get_all();
 
-        ?>
+?>
         <div class="wrap">
             <h1>
                 Terapeuci
@@ -96,14 +101,21 @@ class Rezerwacje_Admin_Therapists {
                 </tbody>
             </table>
         </div>
-        <?php
+    <?php
     }
 
-    private static function render_edit_form($therapist_id) {
+    private static function render_edit_form($therapist_id)
+    {
         $therapist = $therapist_id ? Rezerwacje_Therapist::get($therapist_id) : null;
         $users = get_users(array('role__not_in' => array('administrator')));
 
-        ?>
+        // Zabezpieczenie na wypadek, gdyby kolumny JESZCZE nie było
+        $photo_id = isset($therapist->photo_id) ? $therapist->photo_id : 0;
+        $photo_url = $photo_id ? wp_get_attachment_image_url($photo_id, 'thumbnail') : '';
+        $calendar_color = isset($therapist->calendar_color) ? $therapist->calendar_color : '';
+
+
+    ?>
         <div class="wrap">
             <h1><?php echo $therapist_id ? 'Edytuj terapeutę' : 'Dodaj terapeutę'; ?></h1>
 
@@ -128,21 +140,40 @@ class Rezerwacje_Admin_Therapists {
                         <th><label for="name">Imię i nazwisko *</label></th>
                         <td>
                             <input type="text" name="name" id="name" class="regular-text" required
-                                   value="<?php echo $therapist ? esc_attr($therapist->name) : ''; ?>">
+                                value="<?php echo $therapist ? esc_attr($therapist->name) : ''; ?>">
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><label>Zdjęcie</label></th>
+                        <td>
+                            <div class="image-uploader-wrapper">
+                                <div id="therapist-photo-preview" style="width: 100px; height: 100px; background: #eee; border: 1px solid #ccc; <?php echo $photo_url ? "background-image: url($photo_url); background-size: cover;" : ''; ?>">
+                                </div>
+                                <input type="hidden" name="photo_id" id="photo_id" value="<?php echo esc_attr($photo_id); ?>">
+                                <button type="button" class="button" id="upload-photo-button">Wybierz / Zmień zdjęcie</button>
+                                <button type="button" class="button" id="remove-photo-button" style="<?php echo $photo_id ? '' : 'display: none;'; ?>">Usuń zdjęcie</button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><label for="calendar_color">Kolor w kalendarzu admina</label></th>
+                        <td>
+                            <input type="text" name="calendar_color" id="calendar_color" class="color-picker-field"
+                                value="<?php echo esc_attr($calendar_color); ?>">
                         </td>
                     </tr>
                     <tr>
                         <th><label for="email">Email *</label></th>
                         <td>
                             <input type="email" name="email" id="email" class="regular-text" required
-                                   value="<?php echo $therapist ? esc_attr($therapist->email) : ''; ?>">
+                                value="<?php echo $therapist ? esc_attr($therapist->email) : ''; ?>">
                         </td>
                     </tr>
                     <tr>
                         <th><label for="phone">Telefon</label></th>
                         <td>
                             <input type="tel" name="phone" id="phone" class="regular-text"
-                                   value="<?php echo $therapist ? esc_attr($therapist->phone) : ''; ?>">
+                                value="<?php echo $therapist ? esc_attr($therapist->phone) : ''; ?>">
                         </td>
                     </tr>
                     <tr>
@@ -156,7 +187,7 @@ class Rezerwacje_Admin_Therapists {
                         <td>
                             <label>
                                 <input type="checkbox" name="active" id="active" value="1"
-                                       <?php checked($therapist ? $therapist->active : 1, 1); ?>>
+                                    <?php checked($therapist ? $therapist->active : 1, 1); ?>>
                                 Aktywny
                             </label>
                         </td>
@@ -171,37 +202,73 @@ class Rezerwacje_Admin_Therapists {
         </div>
 
         <script>
-        jQuery(document).ready(function($) {
-            $('#therapist-form').on('submit', function(e) {
-                e.preventDefault();
+            jQuery(document).ready(function($) {
 
-                var formData = {
-                    action: 'rezerwacje_save_therapist',
-                    nonce: rezerwacjeAdmin.nonce,
-                    therapist_id: $('[name="therapist_id"]').val(),
-                    user_id: $('[name="user_id"]').val(),
-                    name: $('[name="name"]').val(),
-                    email: $('[name="email"]').val(),
-                    phone: $('[name="phone"]').val(),
-                    bio: $('[name="bio"]').val(),
-                    active: $('[name="active"]').is(':checked') ? 1 : 0
-                };
+                $('.color-picker-field').wpColorPicker();
 
-                $.post(rezerwacjeAdmin.ajax_url, formData, function(response) {
-                    if (response.success) {
-                        alert('Zapisano pomyślnie');
-                        window.location.href = '<?php echo admin_url('admin.php?page=rezerwacje-therapists'); ?>';
-                    } else {
-                        alert('Błąd: ' + response.data);
+                var mediaUploader;
+                $('#upload-photo-button').on('click', function(e) {
+                    e.preventDefault();
+                    if (mediaUploader) {
+                        mediaUploader.open();
+                        return;
                     }
+                    mediaUploader = wp.media({
+                        title: 'Wybierz zdjęcie terapeuty',
+                        button: {
+                            text: 'Wybierz zdjęcie'
+                        },
+                        multiple: false
+                    });
+                    mediaUploader.on('select', function() {
+                        var attachment = mediaUploader.state().get('selection').first().toJSON();
+                        $('#photo_id').val(attachment.id);
+                        $('#therapist-photo-preview').css('background-image', 'url(' + attachment.sizes.thumbnail.url + ')').css('background-size', 'cover');
+                        $('#remove-photo-button').show();
+                    });
+                    mediaUploader.open();
+                });
+
+                $('#remove-photo-button').on('click', function(e) {
+                    e.preventDefault();
+                    $('#photo_id').val('');
+                    $('#therapist-photo-preview').css('background-image', 'none');
+                    $(this).hide();
+                });
+
+                $('#therapist-form').on('submit', function(e) {
+                    e.preventDefault();
+
+                    var formData = {
+                        action: 'rezerwacje_save_therapist',
+                        nonce: rezerwacjeAdmin.nonce,
+                        therapist_id: $('[name="therapist_id"]').val(),
+                        user_id: $('[name="user_id"]').val(),
+                        name: $('[name="name"]').val(),
+                        email: $('[name="email"]').val(),
+                        phone: $('[name="phone"]').val(),
+                        bio: $('[name="bio"]').val(),
+                        photo_id: $('[name="photo_id"]').val(),
+                        calendar_color: $('[name="calendar_color"]').val(),
+                        active: $('[name="active"]').is(':checked') ? 1 : 0
+                    };
+
+                    $.post(rezerwacjeAdmin.ajax_url, formData, function(response) {
+                        if (response.success) {
+                            alert('Zapisano pomyślnie');
+                            window.location.href = '<?php echo admin_url('admin.php?page=rezerwacje-therapists'); ?>';
+                        } else {
+                            alert('Błąd: ' + response.data);
+                        }
+                    });
                 });
             });
-        });
         </script>
-        <?php
+    <?php
     }
 
-    private static function render_services_form($therapist_id) {
+    private static function render_services_form($therapist_id)
+    {
         $therapist = Rezerwacje_Therapist::get($therapist_id);
         if (!$therapist) {
             wp_die('Terapeuta nie istnieje');
@@ -217,7 +284,7 @@ class Rezerwacje_Admin_Therapists {
             $custom_prices[$service->id] = $service->custom_price;
         }
 
-        ?>
+    ?>
         <div class="wrap">
             <h1>Usługi: <?php echo esc_html($therapist->name); ?></h1>
 
@@ -240,16 +307,16 @@ class Rezerwacje_Admin_Therapists {
                             <tr>
                                 <td>
                                     <input type="checkbox" name="services[]" value="<?php echo $service->id; ?>"
-                                           <?php checked($is_assigned); ?>>
+                                        <?php checked($is_assigned); ?>>
                                 </td>
                                 <td><?php echo esc_html($service->name); ?></td>
                                 <td><?php echo $service->duration; ?> min</td>
                                 <td><?php echo number_format($service->default_price, 2); ?> zł</td>
                                 <td>
                                     <input type="number" name="custom_price[<?php echo $service->id; ?>]"
-                                           step="0.01" min="0" class="small-text"
-                                           value="<?php echo isset($custom_prices[$service->id]) ? esc_attr($custom_prices[$service->id]) : ''; ?>"
-                                           placeholder="<?php echo number_format($service->default_price, 2); ?>">
+                                        step="0.01" min="0" class="small-text"
+                                        value="<?php echo isset($custom_prices[$service->id]) ? esc_attr($custom_prices[$service->id]) : ''; ?>"
+                                        placeholder="<?php echo number_format($service->default_price, 2); ?>">
                                     zł
                                 </td>
                             </tr>
@@ -265,42 +332,43 @@ class Rezerwacje_Admin_Therapists {
         </div>
 
         <script>
-        jQuery(document).ready(function($) {
-            $('#therapist-services-form').on('submit', function(e) {
-                e.preventDefault();
+            jQuery(document).ready(function($) {
+                $('#therapist-services-form').on('submit', function(e) {
+                    e.preventDefault();
 
-                var services = [];
-                $('[name="services[]"]:checked').each(function() {
-                    var serviceId = $(this).val();
-                    var customPrice = $('[name="custom_price[' + serviceId + ']"]').val();
-                    services.push({
-                        id: serviceId,
-                        custom_price: customPrice || null
+                    var services = [];
+                    $('[name="services[]"]:checked').each(function() {
+                        var serviceId = $(this).val();
+                        var customPrice = $('[name="custom_price[' + serviceId + ']"]').val();
+                        services.push({
+                            id: serviceId,
+                            custom_price: customPrice || null
+                        });
+                    });
+
+                    var formData = {
+                        action: 'rezerwacje_save_therapist_services',
+                        nonce: rezerwacjeAdmin.nonce,
+                        therapist_id: $('[name="therapist_id"]').val(),
+                        services: services
+                    };
+
+                    $.post(rezerwacjeAdmin.ajax_url, formData, function(response) {
+                        if (response.success) {
+                            alert('Zapisano pomyślnie');
+                            location.reload();
+                        } else {
+                            alert('Błąd: ' + response.data);
+                        }
                     });
                 });
-
-                var formData = {
-                    action: 'rezerwacje_save_therapist_services',
-                    nonce: rezerwacjeAdmin.nonce,
-                    therapist_id: $('[name="therapist_id"]').val(),
-                    services: services
-                };
-
-                $.post(rezerwacjeAdmin.ajax_url, formData, function(response) {
-                    if (response.success) {
-                        alert('Zapisano pomyślnie');
-                        location.reload();
-                    } else {
-                        alert('Błąd: ' + response.data);
-                    }
-                });
             });
-        });
         </script>
-        <?php
+    <?php
     }
 
-    private static function render_availability_form($therapist_id) {
+    private static function render_availability_form($therapist_id)
+    {
         $therapist = Rezerwacje_Therapist::get($therapist_id);
         if (!$therapist) {
             wp_die('Terapeuta nie istnieje');
@@ -326,7 +394,7 @@ class Rezerwacje_Admin_Therapists {
             7 => 'Niedziela'
         );
 
-        ?>
+    ?>
         <div class="wrap">
             <h1>Dostępność: <?php echo esc_html($therapist->name); ?></h1>
 
@@ -398,56 +466,57 @@ class Rezerwacje_Admin_Therapists {
         </div>
 
         <script>
-        jQuery(document).ready(function($) {
-            $('#availability-form').on('submit', function(e) {
-                e.preventDefault();
+            jQuery(document).ready(function($) {
+                $('#availability-form').on('submit', function(e) {
+                    e.preventDefault();
 
-                var formData = {
-                    action: 'rezerwacje_save_availability',
-                    nonce: rezerwacjeAdmin.nonce,
-                    therapist_id: $('[name="therapist_id"]').val(),
-                    day_of_week: $('[name="day_of_week"]').val(),
-                    start_time: $('[name="start_time"]').val(),
-                    end_time: $('[name="end_time"]').val()
-                };
+                    var formData = {
+                        action: 'rezerwacje_save_availability',
+                        nonce: rezerwacjeAdmin.nonce,
+                        therapist_id: $('[name="therapist_id"]').val(),
+                        day_of_week: $('[name="day_of_week"]').val(),
+                        start_time: $('[name="start_time"]').val(),
+                        end_time: $('[name="end_time"]').val()
+                    };
 
-                $.post(rezerwacjeAdmin.ajax_url, formData, function(response) {
-                    if (response.success) {
-                        alert('Zapisano pomyślnie');
-                        location.reload();
-                    } else {
-                        alert('Błąd: ' + response.data);
+                    $.post(rezerwacjeAdmin.ajax_url, formData, function(response) {
+                        if (response.success) {
+                            alert('Zapisano pomyślnie');
+                            location.reload();
+                        } else {
+                            alert('Błąd: ' + response.data);
+                        }
+                    });
+                });
+
+                $('.delete-availability').on('click', function(e) {
+                    e.preventDefault();
+
+                    if (!confirm('Czy na pewno usunąć tę dostępność?')) {
+                        return;
                     }
+
+                    var id = $(this).data('id');
+
+                    $.post(rezerwacjeAdmin.ajax_url, {
+                        action: 'rezerwacje_delete_availability',
+                        nonce: rezerwacjeAdmin.nonce,
+                        id: id
+                    }, function(response) {
+                        if (response.success) {
+                            location.reload();
+                        } else {
+                            alert('Błąd: ' + response.data);
+                        }
+                    });
                 });
             });
-
-            $('.delete-availability').on('click', function(e) {
-                e.preventDefault();
-
-                if (!confirm('Czy na pewno usunąć tę dostępność?')) {
-                    return;
-                }
-
-                var id = $(this).data('id');
-
-                $.post(rezerwacjeAdmin.ajax_url, {
-                    action: 'rezerwacje_delete_availability',
-                    nonce: rezerwacjeAdmin.nonce,
-                    id: id
-                }, function(response) {
-                    if (response.success) {
-                        location.reload();
-                    } else {
-                        alert('Błąd: ' + response.data);
-                    }
-                });
-            });
-        });
         </script>
-        <?php
+<?php
     }
 
-    public function ajax_save_therapist() {
+    public function ajax_save_therapist()
+    {
         check_ajax_referer('rezerwacje_admin_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
@@ -455,12 +524,15 @@ class Rezerwacje_Admin_Therapists {
         }
 
         $therapist_id = intval($_POST['therapist_id']);
+
         $data = array(
             'user_id' => intval($_POST['user_id']),
             'name' => sanitize_text_field($_POST['name']),
             'email' => sanitize_email($_POST['email']),
             'phone' => sanitize_text_field($_POST['phone']),
             'bio' => sanitize_textarea_field($_POST['bio']),
+            'photo_id' => !empty($_POST['photo_id']) ? intval($_POST['photo_id']) : null,
+            'calendar_color' => sanitize_text_field($_POST['calendar_color']),
             'active' => intval($_POST['active'])
         );
 
@@ -470,14 +542,17 @@ class Rezerwacje_Admin_Therapists {
             $result = Rezerwacje_Therapist::create($data);
         }
 
-        if ($result) {
+        if ($result !== false) { // Musi być !== false, bo update zwraca 0 jeśli nic się nie zmieniło
             wp_send_json_success();
         } else {
-            wp_send_json_error('Nie udało się zapisać');
+            // Zostawiamy logowanie błędów
+            global $wpdb;
+            wp_send_json_error('Nie udało się zapisać. Błąd bazy danych: ' . $wpdb->last_error);
         }
     }
 
-    public function ajax_delete_therapist() {
+    public function ajax_delete_therapist()
+    {
         check_ajax_referer('rezerwacje_admin_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
@@ -494,7 +569,8 @@ class Rezerwacje_Admin_Therapists {
         }
     }
 
-    public function ajax_save_therapist_services() {
+    public function ajax_save_therapist_services()
+    {
         check_ajax_referer('rezerwacje_admin_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
@@ -518,7 +594,8 @@ class Rezerwacje_Admin_Therapists {
         wp_send_json_success();
     }
 
-    public function ajax_save_availability() {
+    public function ajax_save_availability()
+    {
         check_ajax_referer('rezerwacje_admin_nonce', 'nonce');
 
         $therapist_id = intval($_POST['therapist_id']);
@@ -552,7 +629,8 @@ class Rezerwacje_Admin_Therapists {
         }
     }
 
-    public function ajax_delete_availability() {
+    public function ajax_delete_availability()
+    {
         check_ajax_referer('rezerwacje_admin_nonce', 'nonce');
 
         if (!current_user_can('edit_posts')) {

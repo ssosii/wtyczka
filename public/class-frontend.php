@@ -141,10 +141,19 @@ class Rezerwacje_Frontend
 
         $result = array();
         foreach ($therapists as $therapist) {
+
+            // NOWOŚĆ: Pobranie URL zdjęcia
+            $photo_url = '';
+            if (!empty($therapist->photo_id)) {
+                // Używamy rozmiaru 'thumbnail' (domyślnie 150x150), co jest idealne na awatar
+                $photo_url = wp_get_attachment_image_url($therapist->photo_id, 'thumbnail');
+            }
+
             $result[] = array(
                 'id' => $therapist->id,
                 'name' => $therapist->name,
-                'bio' => $therapist->bio
+                'bio' => $therapist->bio,
+                'photo_url' => $photo_url ? $photo_url : '' // NOWOŚĆ: Przekazanie URL do JS
             );
         }
 

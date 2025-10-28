@@ -28,12 +28,32 @@ jQuery(document).ready(function ($) {
                 var html = '';
                 if (response.data.length > 0) {
                     response.data.forEach(function (therapist) {
+
+                        // --- NOWA LOGIKA DLA AVATARA ---
+                        var photoHtml = '';
+                        if (therapist.photo_url) {
+                            photoHtml = '<div class="rezerwacje-therapist-avatar">' +
+                                '<img src="' + therapist.photo_url + '" alt="' + therapist.name + '">' +
+                                '</div>';
+                        } else {
+                            // Fallback na inicjały
+                            var initials = therapist.name.split(' ').map(function (n) { return n[0]; }).join('').substring(0, 2);
+                            photoHtml = '<div class="rezerwacje-therapist-avatar">' +
+                                '<span class="rezerwacje-therapist-initials">' + initials + '</span>' +
+                                '</div>';
+                        }
+
                         html += '<div class="rezerwacje-therapist-card" data-id="' + therapist.id + '">';
+                        html += photoHtml; // Dodaj awatar
+                        html += '<div class="rezerwacje-therapist-details">'; // Otwórz kontener na tekst
                         html += '<h4>' + therapist.name + '</h4>';
                         if (therapist.bio) {
                             html += '<p>' + therapist.bio + '</p>';
                         }
-                        html += '</div>';
+                        html += '</div>'; // Zamknij kontener na tekst
+                        html += '</div>'; // Zamknij kartę
+                        // --- KONIEC NOWEJ LOGIKI ---
+
                     });
                 } else {
                     html = '<p>Brak dostępnych terapeutów.</p>';
@@ -321,4 +341,3 @@ jQuery(document).ready(function ($) {
 
     loadTherapists();
 });
-

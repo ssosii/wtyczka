@@ -126,7 +126,8 @@ class Rezerwacje_Booking
         $order = isset($args['order']) ? $args['order'] : 'DESC';
         $order_by = isset($args['order_by']) ? $args['order_by'] : 'b.booking_date, b.start_time';
 
-        $sql = "SELECT b.*, t.name as therapist_name, s.name as service_name
+        // ***** POPRAWKA: Dodano `t.calendar_color` do zapytania SELECT *****
+        $sql = "SELECT b.*, t.name as therapist_name, s.name as service_name, t.calendar_color
                 FROM $bookings_table b
                 LEFT JOIN $therapists_table t ON b.therapist_id = t.id
                 LEFT JOIN $services_table s ON b.service_id = s.id
@@ -153,7 +154,6 @@ class Rezerwacje_Booking
         $table = $wpdb->prefix . 'rezerwacje_bookings';
 
         // Logika kolizji: (SlotStart < BookEnd) AND (SlotEnd > BookStart)
-        // Dodano warunek (AND id != %d), aby wykluczyć sprawdzaną rezerwację
         $sql = "SELECT COUNT(*) FROM $table
                 WHERE therapist_id = %d
                 AND booking_date = %s
@@ -167,7 +167,7 @@ class Rezerwacje_Booking
             $date,
             $end_time,   // SlotEnd
             $start_time,  // SlotStart
-            $exclude_booking_id // ID rezerwacji do wykluczenia
+            $exclude_booking_id
         ));
 
         return $count > 0;
