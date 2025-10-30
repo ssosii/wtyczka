@@ -200,6 +200,7 @@ class Rezerwacje_Admin_Bookings
     {
         $is_admin = current_user_can('manage_options');
         $therapists = Rezerwacje_Therapist::get_all(array('active' => 1)); // Pobierz wszystkich dla admina
+        $days = array(1 => 'Poniedziałek', 2 => 'Wtorek', 3 => 'Środa', 4 => 'Czwartek', 5 => 'Piątek', 6 => 'Sobota', 7 => 'Niedziela');
 
         $current_therapist_id_for_view = null;
         if (!$is_admin) {
@@ -261,7 +262,7 @@ class Rezerwacje_Admin_Bookings
             <div class="rezerwacje-modal-content">
                 <form id="rezerwacje-block-modal-form">
                     <div class="rezerwacje-modal-header">
-                        <h3 id="block-modal-title">Zablokuj termin</h3>
+                        <h3 id="block-modal-title">Utwórz rezerwację</h3>
                         <button id="block-modal-btn-close" type="button" class="rezerwacje-modal-close">&times;</button>
                     </div>
                     <div class="rezerwacje-modal-body">
@@ -282,15 +283,41 @@ class Rezerwacje_Admin_Bookings
                             <label for="block-modal-name">Nazwa spotkania / Pacjent *</label>
                             <input type="text" id="block-modal-name" class="modal-input" required placeholder="np. Przerwa, Spotkanie, Jan Kowalski">
                         </p>
+
                         <p class="form-row">
+                            <label>Typ</label>
+                            <label style="margin-right: 15px;"><input type="radio" name="block_modal_is_recurring" value="0" checked> Pojedyncza</label>
+                            <label><input type="radio" name="block_modal_is_recurring" value="1"> Powtarzająca</label>
+                        </p>
+
+                        <p class="form-row" id="block-modal-single-date-row">
                             <label for="block-modal-date">Data</label>
-                            <input type="date" id="block-modal-date" class="modal-input" required readonly style="background-color: #f0f0f0;"> <?php // Readonly field 
-                                                                                                                                                ?>
+                            <input type="date" id="block-modal-date" class="modal-input" required>
+                        </p>
+
+                        <p class="form-row" id="block-modal-recurring-day-row" style="display: none;">
+                            <label for="block-modal-day-of-week">Dzień tyg. *</label>
+                            <select id="block-modal-day-of-week" class="modal-input" required>
+                                <option value="">Wybierz...</option>
+                                <?php foreach ($days as $num => $name): ?>
+                                    <option value="<?php echo $num; ?>"><?php echo $name; ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </p>
+
+                        <p class="form-row" id="block-modal-recurring-start-row" style="display: none;">
+                            <label for="block-modal-recurrence-start-date">Start od *</label>
+                            <input type="date" id="block-modal-recurrence-start-date" class="modal-input" required>
+                        </p>
+
+                        <p class="form-row" id="block-modal-recurring-end-row" style="display: none;">
+                            <label for="block-modal-recurrence-end-date">Koniec do</label>
+                            <input type="date" id="block-modal-recurrence-end-date" class="modal-input">
+                            <small>Puste = bez końca.</small>
                         </p>
                         <p class="form-row">
                             <label for="block-modal-start-time">Godzina od</label>
-                            <input type="time" id="block-modal-start-time" class="modal-input" required step="600"> <?php // step 600 = 10 minut 
-                                                                                                                    ?>
+                            <input type="time" id="block-modal-start-time" class="modal-input" required step="600">
                         </p>
                         <p class="form-row">
                             <label for="block-modal-end-time">Godzina do *</label>
@@ -309,7 +336,6 @@ class Rezerwacje_Admin_Bookings
                 </form>
             </div>
         </div>
-
 
         <script>
             document.addEventListener('DOMContentLoaded', function() {
@@ -341,7 +367,7 @@ class Rezerwacje_Admin_Bookings
                 const btnSave = document.getElementById('modal-btn-save');
                 const btnBackToDetails = document.getElementById('modal-btn-back-to-details');
 
-                // --- Referencje do modala BLOKOWANIA ---
+                // --- Referencje do modala BLOKOWANIA (teraz też cyklicznego) ---
                 const blockModal = document.getElementById('rezerwacje-block-modal');
                 const blockModalForm = document.getElementById('rezerwacje-block-modal-form');
                 const blockModalTitle = document.getElementById('block-modal-title');
@@ -355,6 +381,16 @@ class Rezerwacje_Admin_Bookings
                 const btnBlockClose = document.getElementById('block-modal-btn-close');
                 const btnBlockSave = document.getElementById('block-modal-btn-save');
                 const btnBlockCancel = document.getElementById('block-modal-btn-cancel');
+
+                // NOWE referencje do pól cyklicznych
+                const radioRecurring = document.querySelectorAll('input[name="block_modal_is_recurring"]');
+                const singleDateRow = document.getElementById('block-modal-single-date-row');
+                const recurringDayRow = document.getElementById('block-modal-recurring-day-row');
+                const recurringStartRow = document.getElementById('block-modal-recurring-start-row');
+                const recurringEndRow = document.getElementById('block-modal-recurring-end-row');
+                const dayOfWeekSelect = document.getElementById('block-modal-day-of-week');
+                const recurrenceStartDate = document.getElementById('block-modal-recurrence-start-date');
+                const recurrenceEndDate = document.getElementById('block-modal-recurrence-end-date');
 
 
                 let currentBookingId = null;
@@ -525,10 +561,34 @@ class Rezerwacje_Admin_Bookings
                 function hideBlockModal() {
                     blockModal.style.display = 'none';
                     blockModalForm.reset();
+                    // Upewnij się, że radio 'pojedyncza' jest zaznaczone po resecie
+                    document.querySelector('input[name="block_modal_is_recurring"][value="0"]').checked = true;
+                    toggleRecurringFields(false); // Ukryj pola cykliczne
                     blockModalError.style.display = 'none';
                     btnBlockSave.disabled = false;
                     btnBlockSave.innerText = 'Zablokuj';
                 }
+
+                // NOWA funkcja do przełączania widoczności pól
+                function toggleRecurringFields(isRecurring) {
+                    singleDateRow.style.display = isRecurring ? 'none' : 'block';
+                    recurringDayRow.style.display = isRecurring ? 'block' : 'none';
+                    recurringStartRow.style.display = isRecurring ? 'block' : 'none';
+                    recurringEndRow.style.display = isRecurring ? 'block' : 'none';
+
+                    // Zmiana walidacji
+                    blockModalDate.required = !isRecurring;
+                    dayOfWeekSelect.required = isRecurring;
+                    recurrenceStartDate.required = isRecurring;
+                }
+
+                // NOWY listener dla radio buttons
+                radioRecurring.forEach(radio => {
+                    radio.addEventListener('change', function() {
+                        toggleRecurringFields(this.value === '1');
+                    });
+                });
+
                 btnBlockClose.addEventListener('click', hideBlockModal);
                 btnBlockCancel.addEventListener('click', hideBlockModal);
                 blockModal.addEventListener('click', function(e) {
@@ -599,14 +659,33 @@ class Rezerwacje_Admin_Bookings
                         expandRows: true,
                         selectable: true, // Włączenie zaznaczania
 
+                        // ZAKTUALIZOWANA funkcja dateClick
                         dateClick: function(info) {
                             hideEventModal();
                             blockModalForm.reset();
+                            // Resetuj widok pól cyklicznych
+                            document.querySelector('input[name="block_modal_is_recurring"][value="0"]').checked = true;
+                            toggleRecurringFields(false);
+
                             const clickedDate = info.date;
-                            blockModalDate.value = clickedDate.toISOString().split('T')[0];
-                            blockModalStartTime.value = clickedDate.toTimeString().substring(0, 5);
+                            const dateStr = clickedDate.toISOString().split('T')[0];
+                            const timeStr = clickedDate.toTimeString().substring(0, 5);
+                            const dayIndex = clickedDate.getDay(); // 0 = Niedziela, 1 = Poniedziałek
+                            const wpDayOfWeek = (dayIndex === 0) ? 7 : dayIndex; // Konwertuj na 1-7 (Pon-Niedz)
+
+                            // Wypełnij pola pojedyncze
+                            blockModalDate.value = dateStr;
+                            blockModalStartTime.value = timeStr;
+
+                            // Wypełnij pola cykliczne
+                            dayOfWeekSelect.value = wpDayOfWeek;
+                            recurrenceStartDate.value = dateStr;
+
+                            // Ustaw domyślny czas końcowy
                             const defaultEndTime = new Date(clickedDate.getTime() + 60 * 60 * 1000);
                             blockModalEndTime.value = defaultEndTime.toTimeString().substring(0, 5);
+
+                            // Ustaw terapeutę (jeśli wybrano filtr lub jest to widok terapeuty)
                             const currentTherapistId = <?php echo $is_admin ? 'selectedTherapistFilterId || "null"' : json_encode($current_therapist_id_for_view); ?>;
                             if (blockModalTherapist && currentTherapistId) {
                                 blockModalTherapist.value = currentTherapistId;
@@ -666,7 +745,7 @@ class Rezerwacje_Admin_Bookings
                         });
                     }
 
-                    // Obsługa formularza blokowania
+                    // ZAKTUALIZOWANA funkcja wysyłania formularza blokowania
                     blockModalForm.addEventListener('submit', function(e) {
                         e.preventDefault();
                         btnBlockSave.disabled = true;
@@ -685,17 +764,28 @@ class Rezerwacje_Admin_Bookings
                             btnBlockSave.innerText = 'Zablokuj';
                             return;
                         }
+
+                        const isRecurring = document.querySelector('input[name="block_modal_is_recurring"]:checked').value === '1';
+
                         const formData = {
                             action: 'rezerwacje_add_blocked_slot',
                             nonce: rezerwacjeAdmin.nonce,
                             therapist_id: therapistIdToBlock,
                             patient_name: blockModalName.value,
-                            start_date: blockModalDate.value,
                             start_time: blockModalStartTime.value,
                             end_time: blockModalEndTime.value,
                             notes: blockModalNotes.value,
-                            is_recurring: 0
+                            is_recurring: isRecurring ? 1 : 0
                         };
+
+                        if (isRecurring) {
+                            formData.day_of_week = dayOfWeekSelect.value;
+                            formData.start_date = recurrenceStartDate.value; // Użyj pola 'start_date' dla daty początkowej cyklu
+                            formData.recurrence_end_date = recurrenceEndDate.value || null;
+                        } else {
+                            formData.start_date = blockModalDate.value; // Użyj pola 'start_date' dla daty pojedynczej
+                        }
+
                         jQuery.post(rezerwacjeAdmin.ajax_url, formData)
                             .done(function(response) {
                                 if (response.success) {
@@ -1006,10 +1096,26 @@ class Rezerwacje_Admin_Bookings
     }
     public function ajax_add_blocked_slot()
     {
-        if (!check_ajax_referer('rezerwacje_admin_nonce', 'nonce', false) || !current_user_can('manage_options') && !Rezerwacje_Therapist::get(intval($_POST['therapist_id']))?->user_id == get_current_user_id()) wp_send_json_error('Brak uprawnień');
-        $tid = intval($_POST['therapist_id']);
-        if (!$tid) wp_send_json_error('Nie wybrano terapeuty.');
-        $data = ['therapist_id' => $tid, 'patient_name' => sanitize_text_field($_POST['patient_name']), 'start_date' => sanitize_text_field($_POST['start_date']), 'start_time' => sanitize_text_field($_POST['start_time']), 'end_time' => sanitize_text_field($_POST['end_time']), 'is_recurring' => intval($_POST['is_recurring']), 'notes' => sanitize_textarea_field($_POST['notes'])];
+        // Poprawka uprawnień: pozwól terapeutom blokować sloty (jeśli są właścicielami)
+        if (!check_ajax_referer('rezerwacje_admin_nonce', 'nonce', false)) {
+            wp_send_json_error('Błąd bezpieczeństwa.');
+        }
+
+        $therapist_id = intval($_POST['therapist_id']);
+        $therapist = Rezerwacje_Therapist::get($therapist_id);
+
+        $current_user_id = get_current_user_id();
+        $is_admin = current_user_can('manage_options');
+        $is_owner = ($therapist && $therapist->user_id == $current_user_id);
+
+        if (!$is_admin && !$is_owner) {
+            wp_send_json_error('Brak uprawnień.');
+        }
+
+        if (!$therapist_id) wp_send_json_error('Nie wybrano terapeuty.');
+
+        $data = ['therapist_id' => $therapist_id, 'patient_name' => sanitize_text_field($_POST['patient_name']), 'start_date' => sanitize_text_field($_POST['start_date']), 'start_time' => sanitize_text_field($_POST['start_time']), 'end_time' => sanitize_text_field($_POST['end_time']), 'is_recurring' => intval($_POST['is_recurring']), 'notes' => sanitize_textarea_field($_POST['notes'])];
+
         if ($data['is_recurring']) {
             $data['day_of_week'] = intval($_POST['day_of_week']);
             $data['recurrence_end_date'] = !empty($_POST['recurrence_end_date']) ? sanitize_text_field($_POST['recurrence_end_date']) : null;
@@ -1019,7 +1125,15 @@ class Rezerwacje_Admin_Bookings
     }
     public function ajax_remove_blocked_slot()
     {
-        if (!check_ajax_referer('rezerwacje_admin_nonce', 'nonce', false) || !current_user_can('manage_options')) wp_send_json_error('Brak uprawnień');
+        if (!check_ajax_referer('rezerwacje_admin_nonce', 'nonce', false)) {
+            wp_send_json_error('Błąd bezpieczeństwa.');
+        }
+
+        // TODO: Dodać sprawdzanie uprawnień - czy admin lub właściciel blokady
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error('Brak uprawnień.');
+        }
+
         $id = intval($_POST['id']);
         if (Rezerwacje_Booking::remove_blocked_slot($id)) wp_send_json_success();
         else wp_send_json_error('Nie udało się usunąć.');

@@ -119,7 +119,7 @@ class Rezerwacje_Availability
         $availability = self::get_by_therapist($therapist_id, true);
 
         $slots = array();
-        $slot_interval = 15; // Domyślny interwał slotów (np. co 15 minut)
+        $slot_interval = 30; // Domyślny interwał slotów (np. co 15 minut)
         // Można by to pobrać z ustawień wtyczki, jeśli istnieją
 
         foreach ($availability as $avail) {
